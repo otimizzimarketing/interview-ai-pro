@@ -564,10 +564,11 @@ async function startInterview() {
     }
 
     mediaStream = stream;
+    running = true;
 
     await setupAudio(stream);
+    vadLoop();
 
-    running = true;
     document.getElementById('main-btn').className = 'start-btn running';
     document.getElementById('main-btn').textContent = '⏹ Stop Interview';
     setStatus('listen', 'Listening… waiting for a question');
@@ -608,7 +609,6 @@ async function captureSystemAudio() {
       throw new Error('No system audio found. Choose a browser tab and enable "Share tab audio".');
     }
 
-    // Para não deixar vídeo capturando sem necessidade
     videoTracks.forEach(track => track.stop());
 
     return new MediaStream(audioTracks);
@@ -717,14 +717,10 @@ async function setupAudio(stream) {
   analyser.smoothingTimeConstant = 0.15;
 
   sourceNode.connect(analyser);
-
-  vadLoop();
 }
 
 function getVadThreshold() {
   const raw = parseInt(document.getElementById('vad-t').value, 10) || 5;
-  // Mapeia slider 1..20 para threshold mais realista
-  // Ex.: 1 => 0.0025 | 5 => 0.0045 | 10 => 0.007 | 20 => 0.012
   return 0.002 + (raw * 0.0005);
 }
 
@@ -748,8 +744,8 @@ function vadLoop() {
 
   updateBars(rms);
 
-  if (debugMode && Math.random() < 0.02) {
-    console.log('[InterviewAI] RMS:', rms.toFixed(5), 'threshold:', thr.toFixed(5));
+  if (debugMode && Math.random() < 0.05) {
+    console.log('[InterviewAI] RMS:', rms.toFixed(5), 'threshold:', thr.toFixed(5), 'running:', running);
   }
 
   if (rms > thr) {
