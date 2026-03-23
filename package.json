@@ -1,0 +1,17 @@
+{
+  "name": "interview-ai-pro",
+  "version": "1.0.0",
+  "description": "InterviewAI Pro — real-time interview assistant SaaS backend",
+  "main": "server.js",
+  "engines": { "node": ">=18.0.0" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "stripe": "^16.0.0"
+  }
+}
