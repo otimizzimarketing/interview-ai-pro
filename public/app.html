@@ -315,6 +315,7 @@ let debugMode = true;
   }
 
   loadProfile();
+  ensureCaptureIndicator();
 
   const mq = document.getElementById('mq');
   if (mq) {
@@ -445,6 +446,8 @@ function showApp(data) {
     document.getElementById('plan-badge').textContent =
       '● ' + info.plan.charAt(0).toUpperCase() + info.plan.slice(1);
   }
+
+  ensureCaptureIndicator();
 }
 
 function doLogout() {
@@ -524,6 +527,9 @@ function isSecureEnoughForMedia() {
 
 async function startInterview() {
   try {
+    ensureCaptureIndicator();
+    resetCaptureIndicator();
+
     if (!isSecureEnoughForMedia()) {
       toast('Audio capture requires HTTPS or localhost', 'err');
       setStatus('idle', 'Open the app on HTTPS or localhost');
@@ -699,6 +705,7 @@ function stopInterview() {
   document.getElementById('main-btn').textContent = '▶ Start Interview Mode';
   setStatus('idle', 'Stopped — press Start to resume');
   resetBars();
+  resetCaptureIndicator();
 }
 
 // ════════════════════════════════════════════
@@ -743,6 +750,7 @@ function vadLoop() {
   const silMs = parseInt(document.getElementById('sil-ms').value, 10) || 1800;
 
   updateBars(rms);
+  updateCaptureIndicator(rms, thr);
 
   if (debugMode && Math.random() < 0.05) {
     console.log('[InterviewAI] RMS:', rms.toFixed(5), 'threshold:', thr.toFixed(5), 'running:', running);
@@ -1012,8 +1020,105 @@ function setStatus(state, html) {
   document.getElementById('st').innerHTML = html;
 }
 
+function ensureCaptureIndicator() {
+  const statusBar = document.querySelector('.status-bar');
+  if (!statusBar) return;
+
+  if (!document.getElementById('cap-indicator')) {
+    const indicator = document.createElement('div');
+    indicator.className = 'cap-indicator';
+    indicator.id = 'cap-indicator';
+    indicator.innerHTML = `
+      <span class="cap-dot" id="cap-dot"></span>
+      <span id="cap-text">No audio</span>
+    `;
+
+    const levelWrap = statusBar.querySelector('.lw');
+    if (levelWrap) statusBar.insertBefore(indicator, levelWrap);
+    else statusBar.appendChild(indicator);
+  }
+
+  if (!document.getElementById('cap-style')) {
+    const style = document.createElement('style');
+    style.id = 'cap-style';
+    style.textContent = `
+      .cap-indicator{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        font-size:12px;
+        color:var(--dim);
+        min-width:120px;
+        justify-content:flex-end;
+        margin-left:auto;
+      }
+      .cap-dot{
+        width:10px;
+        height:10px;
+        border-radius:50%;
+        background:var(--b);
+        transition:all .12s ease;
+        box-shadow:0 0 0 rgba(79,142,247,0);
+        flex-shrink:0;
+      }
+      .cap-dot.live{
+        background:var(--green);
+        box-shadow:0 0 12px rgba(52,211,153,.45);
+      }
+      .cap-dot.hot{
+        background:var(--yellow);
+        box-shadow:0 0 14px rgba(251,191,36,.45);
+      }
+      .cap-dot.peak{
+        background:var(--red);
+        box-shadow:0 0 16px rgba(248,113,113,.45);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
+function updateCaptureIndicator(rms, thr) {
+  const dot = document.getElementById('cap-dot');
+  const text = document.getElementById('cap-text');
+
+  if (!dot || !text) return;
+
+  dot.className = 'cap-dot';
+
+  if (rms < 0.0015) {
+    text.textContent = 'No audio';
+    return;
+  }
+
+  if (rms < thr) {
+    dot.classList.add('live');
+    text.textContent = 'Audio detected';
+    return;
+  }
+
+  if (rms < thr * 2.2) {
+    dot.classList.add('hot');
+    text.textContent = 'Voice detected';
+    return;
+  }
+
+  dot.classList.add('peak');
+  text.textContent = 'Strong voice';
+}
+
+function resetCaptureIndicator() {
+  const dot = document.getElementById('cap-dot');
+  const text = document.getElementById('cap-text');
+
+  if (!dot || !text) return;
+
+  dot.className = 'cap-dot';
+  text.textContent = 'No audio';
+}
+
 function updateBars(rms) {
-  const visual = Math.min(Math.max(rms * 180, 0), 5);
+  const visual = Math.min(5, Math.floor(rms * 600));
 
   [0,1,2,3,4].forEach(i => {
     const el = document.getElementById('lb' + i);
