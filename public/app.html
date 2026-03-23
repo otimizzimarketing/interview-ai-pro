@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InterviewAI Pro — App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0c0c0c; --s: #161616; --s2: #1f1f1f; --b: #2a2a2a;
+      --acc: #4f8ef7; --acc-d: rgba(79,142,247,.15);
+      --green: #34d399; --green-d: rgba(52,211,153,.12);
+      --red: #f87171; --red-d: rgba(248,113,113,.12);
+      --yellow: #fbbf24; --yellow-d: rgba(251,191,36,.12);
+      --text: #e0e0e0; --dim: #666; --r: 10px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; }
+    .app { max-width: 820px; margin: 0 auto; padding: 0 14px 20px; }
+
+    /* ── LOGIN SCREEN ── */
+    #login-screen {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .login-box {
+      background: var(--s); border: 1px solid var(--b); border-radius: 14px;
+      padding: 36px; width: 100%; max-width: 420px; margin: 20px;
+    }
+    .login-logo { font-size: 22px; font-weight: 800; color: var(--acc); margin-bottom: 6px; }
+    .login-logo span { color: var(--dim); font-size: 13px; font-weight: 400; margin-left: 6px; }
+    .login-desc { font-size: 13px; color: var(--dim); margin-bottom: 24px; }
+    .lbl { display: block; font-size: 11px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .4px; margin: 14px 0 5px; }
+    input[type=text], input[type=password], input[type=email], textarea, select {
+      width: 100%; background: var(--bg); border: 1px solid var(--b);
+      border-radius: 7px; color: var(--text); padding: 9px 11px;
+      font-size: 13px; font-family: inherit; transition: border-color .15s; resize: vertical;
+    }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--acc); }
+    .btn { display: inline-flex; align-items: center; gap: 5px; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; transition: all .15s; }
+    .btn-p { background: var(--acc); color: #fff; width: 100%; justify-content: center; margin-top: 14px; }
+    .btn-p:hover { background: #3d7de0; }
+    .login-err { font-size: 12px; color: var(--red); margin-top: 8px; display: none; }
+    .login-footer { text-align: center; margin-top: 16px; font-size: 12px; color: var(--dim); }
+    .login-footer a { color: var(--acc); text-decoration: none; }
+
+    /* ── MAIN APP (hidden until logged in) ── */
+    #main-app { display: none; }
+
+    header { display: flex; align-items: center; padding: 14px 0 12px; border-bottom: 1px solid var(--b); gap: 10px; }
+    .logo { font-size: 15px; font-weight: 800; color: var(--acc); }
+    .logo em { font-style: normal; }
+    .hr { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--b); color: var(--dim); background: var(--s); white-space: nowrap; }
+    .pill.g { background: var(--green-d); color: var(--green); border-color: rgba(52,211,153,.3); }
+    .pill.r { background: var(--red-d);   color: var(--red);   border-color: rgba(248,113,113,.3); }
+    .btn-sm-hdr { background: var(--s); border: 1px solid var(--b); color: var(--dim); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+    .btn-sm-hdr:hover { color: var(--red); border-color: var(--red-d); }
+
+    /* ── PROFILE PANEL ── */
+    .panel { background: var(--s); border: 1px solid var(--b); border-radius: var(--r); margin-top: 12px; overflow: hidden; }
+    .panel-toggle { display: flex; align-items: center; gap: 8px; padding: 11px 14px; cursor: pointer; user-select: none; font-size: 13px; font-weight: 600; }
+    .panel-toggle:hover { background: var(--s2); }
+    .panel-toggle .ps { margin-left: auto; font-size: 11px; color: var(--dim); }
+    .panel-toggle .ps.ok { color: var(--green); }
+    .chev { font-size: 9px; color: var(--dim); transition: transform .2s; }
+    .chev.open { transform: rotate(180deg); }
+    .panel-body { padding: 0 14px 14px; display: none; }
+    .panel-body.open { display: block; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    textarea { min-height: 110px; }
+    select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+    .btn-save { background: var(--acc); color: #fff; padding: 8px 16px; border-radius: 7px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+    .btn-save:hover { background: #3d7de0; }
+
+    /* VAD SLIDER */
+    .vad-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+    input[type=range] { flex: 1; accent-color: var(--acc); }
+    .vv { font-size: 12px; color: var(--acc); min-width: 36px; text-align: right; }
+
+    /* ── INTERVIEW CONTROLS ── */
+    .ic { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .src-row { display: flex; gap: 8px; }
+    .src-btn { flex: 1; padding: 10px; border-radius: 8px; cursor: pointer; border: 1px solid var(--b); background: var(--s); color: var(--dim); font-size: 12px; font-weight: 600; text-align: center; transition: all .15s; }
+    .src-btn:hover { border-color: var(--acc); color: var(--text); }
+    .src-btn.active { background: var(--acc-d); border-color: var(--acc); color: var(--acc); }
+    .src-btn .si { font-size: 18px; display: block; margin-bottom: 3px; }
+
+    .start-btn { width: 100%; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; transition: all .2s; }
+    .start-btn.idle    { background: var(--green); color: #0c0c0c; }
+    .start-btn.idle:hover { background: #2fbf88; box-shadow: 0 0 20px rgba(52,211,153,.25); }
+    .start-btn.running { background: var(--red-d); color: var(--red); border: 1px solid rgba(248,113,113,.3); }
+
+    /* ── STATUS BAR ── */
+    .status-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--s); border: 1px solid var(--b); border-radius: var(--r); min-height: 46px; }
+    .sd { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .sd.idle    { background: var(--dim); }
+    .sd.listen  { background: var(--green); animation: blink 1.2s ease-in-out infinite; }
+    .sd.speech  { background: var(--yellow); animation: blink .6s ease-in-out infinite; }
+    .sd.process { background: var(--acc); animation: blink .4s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1}50%{opacity:.25} }
+    .st { font-size: 13px; color: var(--dim); }
+    .lw { margin-left: auto; display: flex; align-items: center; gap: 3px; }
+    .lb { width: 4px; height: 14px; background: var(--b); border-radius: 2px; transition: background .08s; }
+    .lb.on { background: var(--green); } .lb.mid { background: var(--yellow); } .lb.hi { background: var(--red); }
+
+    .info-box { background: rgba(79,142,247,.07); border: 1px solid rgba(79,142,247,.2); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #8ab4f8; line-height: 1.6; }
+    .info-box b { color: var(--acc); }
+
+    /* ── ANSWER ── */
+    .ca { background: var(--s); border: 1px solid var(--b); border-radius: var(--r); padding: 16px 18px; min-height: 90px; margin-top: 12px; transition: border-color .3s; }
+    .ca.flash { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc-d); }
+    .cal { font-size: 11px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .caq { font-size: 12px; color: var(--dim); font-style: italic; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--b); }
+    .cat { font-size: 16px; line-height: 1.65; color: var(--text); white-space: pre-wrap; }
+    .cat.dim { color: var(--dim); font-style: italic; font-size: 13px; }
+    .caf { display: flex; justify-content: flex-end; margin-top: 10px; gap: 6px; }
+    .bts { font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; border: 1px solid var(--b); background: var(--s2); color: var(--dim); transition: all .15s; }
+    .bts:hover { color: var(--text); } .bts.ok { color: var(--green); border-color: rgba(52,211,153,.3); }
+
+    /* MANUAL FALLBACK */
+    .mf { margin-top: 8px; }
+    .mft { font-size: 11px; color: var(--dim); cursor: pointer; } .mft:hover { color: var(--text); }
+    .mfb { display: none; margin-top: 6px; gap: 8px; }
+    .mfb textarea { flex: 1; min-height: 52px; }
+    .mfbtn { background: var(--acc); color: #fff; border: none; border-radius: 7px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; align-self: flex-end; }
+
+    /* HISTORY */
+    .hh { display: flex; align-items: center; margin: 16px 0 8px; }
+    .ht { font-size: 12px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+    .hg { background: none; border: none; color: var(--dim); font-size: 11px; cursor: pointer; padding: 3px 8px; border-radius: 5px; margin-left: auto; }
+    .hg:hover { background: var(--s2); color: var(--text); }
+    .hl { display: flex; flex-direction: column; gap: 8px; }
+    .hc { background: var(--s); border: 1px solid var(--b); border-radius: 8px; padding: 10px 13px; }
+    .hcq { font-size: 11px; color: var(--dim); font-style: italic; margin-bottom: 5px; }
+    .hca { font-size: 13px; color: var(--text); line-height: 1.55; white-space: pre-wrap; }
+    .hcf { display: flex; justify-content: flex-end; gap: 5px; margin-top: 8px; }
+
+    /* TOAST */
+    #toast { position: fixed; bottom: 18px; right: 18px; background: var(--s2); border: 1px solid var(--b); border-radius: 8px; padding: 9px 15px; font-size: 13px; opacity: 0; transform: translateY(6px); transition: all .2s; pointer-events: none; z-index: 999; }
+    #toast.show { opacity: 1; transform: none; }
+    #toast.ok { color: var(--green); border-color: rgba(52,211,153,.35); }
+    #toast.err { color: var(--red); border-color: rgba(248,113,113,.35); }
+
+    .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--b); border-top-color: var(--acc); border-radius: 50%; animation: spinning .7s linear infinite; vertical-align: middle; }
+    @keyframes spinning { to { transform: rotate(360deg); } }
+
+    /* License info */
+    .lic-info { font-size: 11px; color: var(--dim); text-align: right; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">InterviewAI<em style="color:var(--acc)">Pro</em> <span>real-time assistant</span></div>
+    <div class="login-desc">Entre com sua chave de licença para acessar o app.</div>
+    <label class="lbl">Chave de licença</label>
+    <input type="text" id="lic-key" placeholder="IAI-XXXXXXXXXXXXXXXXXXXX" autocomplete="off" style="text-transform:uppercase;letter-spacing:1px;font-size:13px;" />
+    <div class="login-err" id="login-err"></div>
+    <button class="btn btn-p" onclick="doLogin()">Entrar →</button>
+    <div class="login-footer">
+      Não tem uma licença? <a href="index.html">Ver planos</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="main-app">
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">InterviewAI<em>Pro</em></div>
+    <div class="hr">
+      <span class="pill g" id="plan-badge">● Active</span>
+      <span class="pill" id="exp-badge"></span>
+      <button class="btn-sm-hdr" onclick="doLogout()">Logout</button>
+    </div>
+  </header>
+
+  <!-- PROFILE PANEL -->
+  <div class="panel">
+    <div class="panel-toggle" onclick="togglePanel('profile-body','profile-chev')">
+      <span>👤</span> Profile & Settings
+      <span class="ps" id="profile-ps">Click to set up</span>
+      <span class="chev" id="profile-chev">▼</span>
+    </div>
+    <div class="panel-body open" id="profile-body">
+      <div class="grid2">
+        <div>
+          <label class="lbl">Your Name</label>
+          <input type="text" id="pname" placeholder="e.g. Simon Queiroz" />
+        </div>
+        <div>
+          <label class="lbl">Response Style</label>
+          <select id="pstyle">
+            <option value="concise">Concise (2-3 sentences)</option>
+            <option value="detailed">Detailed (4-6 sentences)</option>
+            <option value="star">STAR method</option>
+            <option value="bullets">Bullet points</option>
+          </select>
+        </div>
+      </div>
+      <label class="lbl">Professional Profile (paste your resume / experience / skills)</label>
+      <textarea id="pprofile" placeholder="Marketing professional with 5+ years at Otimizzi Marketing...&#10;Skills: SEO, Google Ads, Meta Ads, Analytics, Copywriting...&#10;Experience: ...&#10;Education: ..."></textarea>
+      <div class="grid2" style="margin-top:12px;">
+        <div>
+          <label class="lbl">Silence detection (end of question)</label>
+          <div class="vad-row">
+            <input type="range" id="sil-ms" min="800" max="3000" step="200" value="1800" oninput="document.getElementById('sil-val').textContent=this.value+'ms'" />
+            <span class="vv" id="sil-val">1800ms</span>
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Voice sensitivity</label>
+          <div class="vad-row">
+            <input type="range" id="vad-t" min="1" max="20" value="5" oninput="document.getElementById('vad-val').textContent=this.value" />
+            <span class="vv" id="vad-val">5</span>
+          </div>
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveProfile()">✓ Save profile</button>
+    </div>
+  </div>
+
+  <!-- INTERVIEW CONTROLS -->
+  <div class="ic">
+    <div>
+      <label class="lbl" style="margin-top:14px;">Audio Source</label>
+      <div class="src-row">
+        <div class="src-btn active" id="src-sys" onclick="setSrc('system')">
+          <span class="si">🖥</span>System audio<br><span style="font-size:10px;font-weight:400;color:var(--dim)">Captures the video call</span>
+        </div>
+        <div class="src-btn" id="src-mic" onclick="setSrc('mic')">
+          <span class="si">🎙</span>Microphone<br><span style="font-size:10px;font-weight:400;color:var(--dim)">Captures ambient audio</span>
+        </div>
+      </div>
+      <div class="info-box" id="src-hint" style="margin-top:8px;">
+        <b>System audio:</b> Click Start → share the video call tab in Chrome and <b>enable "Share tab audio"</b>. The app then auto-detects when the interviewer speaks.
+      </div>
+    </div>
+    <button class="start-btn idle" id="main-btn" onclick="toggleInterview()">▶ Start Interview Mode</button>
+    <div class="status-bar">
+      <div class="sd idle" id="sd"></div>
+      <div class="st" id="st">Ready — press Start to begin</div>
+      <div class="lw">
+        <div class="lb" id="lb0"></div><div class="lb" id="lb1"></div>
+        <div class="lb" id="lb2"></div><div class="lb" id="lb3"></div>
+        <div class="lb" id="lb4"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANSWER DISPLAY -->
+  <div class="ca" id="ca">
+    <div class="cal">💡 Suggested Answer</div>
+    <div class="cat dim">Waiting for interview to start…</div>
+  </div>
+
+  <!-- MANUAL FALLBACK -->
+  <div class="mf">
+    <span class="mft" onclick="toggleManual()">⌨ Manual input (fallback)</span>
+    <div class="mfb" id="mfb">
+      <textarea id="mq" placeholder="Type the question… Ctrl+Enter to submit" rows="2"></textarea>
+      <button class="mfbtn" onclick="submitManual()">⚡</button>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="hh"><span class="ht">📋 History</span><button class="hg" onclick="clearHist()">🗑 Clear</button></div>
+  <div class="hl" id="hl"></div>
+
+</div><!-- /app -->
+</div><!-- /main-app -->
+
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════
+let sessionToken = localStorage.getItem('iai_token') || '';
+let profile = JSON.parse(localStorage.getItem('iai_profile') || 'null') || {};
+
+let audioSrc = 'system';
+let running  = false;
+let audioCtx = null, mediaStream = null, analyser = null;
+let mediaRec = null, chunks = [];
+let isSpeaking = false, silTimer = null, speechStart = 0;
+let raf = null;
+
+// ════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════
+;(async function init() {
+  if (sessionToken) {
+    // Try to restore session
+    const ok = await verifySession();
+    if (ok) { showApp(); }
+    else { sessionToken = ''; localStorage.removeItem('iai_token'); }
+  }
+  loadProfile();
+  document.getElementById('mq').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submitManual(); }
+  });
+})();
+
+async function verifySession() {
+  // We try a lightweight request — if it fails with 401, session is bad
+  try {
+    const r = await fetch('/api/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
+      body: JSON.stringify({ question: 'ping', profile: 'test', name: '', style: 'concise' })
+    });
+    // 400 is OK (missing fields but auth passed), 401 is bad session
+    return r.status !== 401;
+  } catch { return false; }
+}
+
+function loadProfile() {
+  if (profile.name)    document.getElementById('pname').value    = profile.name;
+  if (profile.profile) document.getElementById('pprofile').value = profile.profile;
+  if (profile.style)   document.getElementById('pstyle').value   = profile.style;
+  if (profile.silMs)   { document.getElementById('sil-ms').value = profile.silMs; document.getElementById('sil-val').textContent = profile.silMs + 'ms'; }
+  if (profile.vadT)    { document.getElementById('vad-t').value  = profile.vadT; document.getElementById('vad-val').textContent = profile.vadT; }
+  if (profile.name || profile.profile) {
+    document.getElementById('profile-ps').textContent = 'Configured ✓';
+    document.getElementById('profile-ps').className = 'ps ok';
+  }
+}
+
+// ════════════════════════════════════════════
+//  LOGIN / LOGOUT
+// ════════════════════════════════════════════
+async function doLogin() {
+  const key = document.getElementById('lic-key').value.trim().toUpperCase();
+  const err = document.getElementById('login-err');
+  if (!key) { err.textContent = 'Enter your license key.'; err.style.display = 'block'; return; }
+  err.style.display = 'none';
+
+  try {
+    const r    = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      if (r.status === 402) err.textContent = `License expired on ${new Date(data.expiresAt).toLocaleDateString()}. Please renew.`;
+      else err.textContent = data.error || 'Invalid license key.';
+      err.style.display = 'block'; return;
+    }
+    sessionToken = data.token;
+    localStorage.setItem('iai_token', sessionToken);
+    localStorage.setItem('iai_plan', JSON.stringify({ plan: data.plan, email: data.email, expiresAt: data.expiresAt }));
+    showApp(data);
+  } catch (e) {
+    err.textContent = 'Server error: ' + e.message; err.style.display = 'block';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') doLogin();
+});
+
+function showApp(data) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-app').style.display     = 'block';
+  const info = data || JSON.parse(localStorage.getItem('iai_plan') || '{}');
+  if (info.expiresAt) {
+    document.getElementById('exp-badge').textContent = 'Expires ' + new Date(info.expiresAt).toLocaleDateString();
+  }
+  if (info.plan) {
+    document.getElementById('plan-badge').textContent = '● ' + info.plan.charAt(0).toUpperCase() + info.plan.slice(1);
+  }
+}
+
+function doLogout() {
+  sessionToken = '';
+  localStorage.removeItem('iai_token');
+  localStorage.removeItem('iai_plan');
+  stopInterview();
+  document.getElementById('main-app').style.display     = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+// ════════════════════════════════════════════
+//  PROFILE
+// ════════════════════════════════════════════
+function saveProfile() {
+  profile = {
+    name:    document.getElementById('pname').value.trim(),
+    profile: document.getElementById('pprofile').value.trim(),
+    style:   document.getElementById('pstyle').value,
+    silMs:   document.getElementById('sil-ms').value,
+    vadT:    document.getElementById('vad-t').value
+  };
+  if (!profile.profile) { toast('Add your professional profile first', 'err'); return; }
+  localStorage.setItem('iai_profile', JSON.stringify(profile));
+  document.getElementById('profile-ps').textContent = 'Saved ✓';
+  document.getElementById('profile-ps').className   = 'ps ok';
+  toast('Profile saved!', 'ok');
+  // Auto-close panel
+  document.getElementById('profile-body').classList.remove('open');
+  document.getElementById('profile-chev').classList.remove('open');
+}
+
+function togglePanel(bodyId, chevId) {
+  document.getElementById(bodyId).classList.toggle('open');
+  document.getElementById(chevId).classList.toggle('open');
+}
+
+// ════════════════════════════════════════════
+//  SOURCE
+// ════════════════════════════════════════════
+function setSrc(src) {
+  audioSrc = src;
+  document.getElementById('src-sys').classList.toggle('active', src === 'system');
+  document.getElementById('src-mic').classList.toggle('active', src === 'mic');
+  document.getElementById('src-hint').innerHTML = src === 'system'
+    ? '<b>System audio:</b> Click Start → share the video call tab in Chrome and <b>enable "Share tab audio"</b>. The app auto-detects when the interviewer speaks.'
+    : '<b>Microphone:</b> The app listens to your mic. Best with headphones + open mic that picks up ambient sound, or mic near speakers.';
+}
+
+// ════════════════════════════════════════════
+//  INTERVIEW TOGGLE
+// ════════════════════════════════════════════
+async function toggleInterview() {
+  if (running) { stopInterview(); return; }
+  if (!profile.profile) { toast('Save your professional profile first', 'err'); return; }
+  await startInterview();
+}
+
+async function startInterview() {
+  try {
+    let stream;
+    if (audioSrc === 'system') {
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: 1, height: 1 },
+          audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 16000 }
+        });
+        if (stream.getAudioTracks().length === 0) {
+          stream.getTracks().forEach(t => t.stop());
+          throw new Error('No audio. Did you check "Share tab audio"?');
+        }
+        stream.getVideoTracks().forEach(t => t.stop()); // keep only audio
+      } catch (e) {
+        if (e.name === 'NotAllowedError') { toast('Sharing cancelled', 'err'); return; }
+        toast('System audio failed — falling back to mic. (' + e.message + ')', 'err');
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false }
+      });
+    }
+    mediaStream = stream;
+    setupAudio(stream);
+    running = true;
+    document.getElementById('main-btn').className  = 'start-btn running';
+    document.getElementById('main-btn').textContent = '⏹ Stop Interview';
+    setStatus('listen', 'Listening… waiting for a question');
+    stream.getAudioTracks()[0].addEventListener('ended', () => { if (running) stopInterview(); });
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+function stopInterview() {
+  running = false;
+  cancelAnimationFrame(raf);
+  clearTimeout(silTimer);
+  if (mediaRec && mediaRec.state !== 'inactive') mediaRec.stop();
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  isSpeaking = false;
+  document.getElementById('main-btn').className  = 'start-btn idle';
+  document.getElementById('main-btn').textContent = '▶ Start Interview Mode';
+  setStatus('idle', 'Stopped — press Start to resume');
+  resetBars();
+}
+
+// ════════════════════════════════════════════
+//  AUDIO PIPELINE
+// ════════════════════════════════════════════
+function setupAudio(stream) {
+  audioCtx = new AudioContext();
+  const src = audioCtx.createMediaStreamSource(stream);
+  analyser  = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  src.connect(analyser);
+  vadLoop();
+}
+
+function vadLoop() {
+  if (!running) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) { const v = (data[i]-128)/128; sum += v*v; }
+  const rms  = Math.sqrt(sum / data.length);
+  const thr  = parseInt(document.getElementById('vad-t').value) / 1000;
+  const silMs = parseInt(document.getElementById('sil-ms').value);
+
+  updateBars(rms);
+
+  if (rms > thr) {
+    clearTimeout(silTimer); silTimer = null;
+    if (!isSpeaking) {
+      isSpeaking = true; speechStart = Date.now(); chunks = [];
+      startRec();
+      setStatus('speech', 'Speech detected — recording…');
+    }
+  } else if (isSpeaking && !silTimer) {
+    const speechSnapshot = speechStart;
+    silTimer = setTimeout(() => {
+      isSpeaking = false; silTimer = null;
+      const dur = Date.now() - speechSnapshot - silMs;
+      if (dur > 700) {
+        setStatus('process', '<span class="spin"></span> Transcribing…');
+        stopRecAndProcess();
+      } else {
+        stopRecDiscard();
+        setStatus('listen', 'Listening… (short sound ignored)');
+      }
+    }, silMs);
+  }
+  raf = requestAnimationFrame(vadLoop);
+}
+
+function startRec() {
+  if (!mediaStream) return;
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+  mediaRec = new MediaRecorder(mediaStream, { mimeType: mime });
+  mediaRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  mediaRec.start(200);
+}
+
+function stopRecAndProcess() {
+  if (!mediaRec || mediaRec.state === 'inactive') { processAudio(); return; }
+  mediaRec.onstop = processAudio;
+  mediaRec.stop();
+}
+
+function stopRecDiscard() {
+  if (mediaRec && mediaRec.state !== 'inactive') { mediaRec.onstop = null; mediaRec.stop(); }
+  chunks = [];
+}
+
+async function processAudio() {
+  if (!chunks.length) { setStatus('listen', 'Listening…'); return; }
+  const blob = new Blob(chunks, { type: 'audio/webm' });
+  chunks = [];
+
+  try {
+    // Convert blob to base64 for JSON transport
+    const ab     = await blob.arrayBuffer();
+    const b64    = btoa(String.fromCharCode(...new Uint8Array(ab)));
+
+    // 1. Transcribe
+    const tr = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
+      body: JSON.stringify({ audio: b64, mimeType: 'audio/webm' })
+    });
+    const trData = await tr.json();
+    if (!tr.ok) {
+      if (tr.status === 401) { doLogout(); return; }
+      throw new Error(trData.error || 'Transcription error');
+    }
+
+    const question = (trData.text || '').trim();
+    if (!question || question.length < 4) {
+      setStatus('listen', 'Listening… (no speech detected, retrying)');
+      return;
+    }
+
+    setStatus('process', '<span class="spin"></span> Generating answer…');
+    showAnswer(question, null);
+
+    // 2. Generate answer
+    const ar = await fetch('/api/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
+      body: JSON.stringify({
+        question,
+        profile: profile.profile,
+        name:    profile.name || '',
+        style:   profile.style || 'concise',
+        model:   'gpt-4o-mini'
+      })
+    });
+    const arData = await ar.json();
+    if (!ar.ok) {
+      if (ar.status === 401) { doLogout(); return; }
+      throw new Error(arData.error || 'Answer generation error');
+    }
+
+    showAnswer(question, arData.answer);
+    addHistory(question, arData.answer);
+    setStatus('listen', 'Listening… waiting for next question');
+
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+    setStatus('listen', 'Error — listening again…');
+  }
+}
+
+// ════════════════════════════════════════════
+//  MANUAL FALLBACK
+// ════════════════════════════════════════════
+function toggleManual() {
+  const b = document.getElementById('mfb');
+  b.style.display = b.style.display === 'flex' ? 'none' : 'flex';
+}
+async function submitManual() {
+  const q = document.getElementById('mq').value.trim();
+  if (!q || !profile.profile) { toast(!q ? 'Type a question first' : 'Save your profile first', 'err'); return; }
+  document.getElementById('mq').value = '';
+  showAnswer(q, null);
+  setStatus('process', '<span class="spin"></span> Generating answer…');
+  try {
+    const r    = await fetch('/api/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
+      body: JSON.stringify({ question: q, profile: profile.profile, name: profile.name || '', style: profile.style || 'concise' })
+    });
+    const data = await r.json();
+    if (!r.ok) { if (r.status === 401) { doLogout(); return; } throw new Error(data.error); }
+    showAnswer(q, data.answer);
+    addHistory(q, data.answer);
+    setStatus(running ? 'listen' : 'idle', running ? 'Listening…' : 'Ready');
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+// ════════════════════════════════════════════
+//  UI
+// ════════════════════════════════════════════
+function setStatus(state, html) {
+  document.getElementById('sd').className = 'sd ' + state;
+  document.getElementById('st').innerHTML = html;
+}
+
+function updateBars(rms) {
+  const level = Math.min(rms * 120, 5);
+  [0,1,2,3,4].forEach(i => {
+    const el = document.getElementById('lb'+i);
+    el.className = i < level ? ('lb ' + (i < 2 ? 'on' : i < 4 ? 'mid' : 'hi')) : 'lb';
+  });
+}
+function resetBars() { [0,1,2,3,4].forEach(i => { document.getElementById('lb'+i).className = 'lb'; }); }
+
+function showAnswer(q, a) {
+  const ca = document.getElementById('ca');
+  ca.innerHTML = `
+    <div class="cal">💡 Suggested Answer</div>
+    <div class="caq">"${esc(q)}"</div>
+    ${a
+      ? `<div class="cat">${esc(a)}</div><div class="caf"><button class="bts" onclick="cp(this,${JSON.stringify(a).replace(/"/g,'&quot;')})">📋 Copy</button></div>`
+      : `<div class="cat dim"><span class="spin"></span> Generating…</div>`
+    }
+  `;
+  ca.classList.add('flash');
+  setTimeout(() => ca.classList.remove('flash'), 3000);
+}
+
+function addHistory(q, a) {
+  const hl   = document.getElementById('hl');
+  const card = document.createElement('div');
+  card.className = 'hc';
+  card.innerHTML = `
+    <div class="hcq">"${esc(q)}"</div>
+    <div class="hca">${esc(a)}</div>
+    <div class="hcf">
+      <button class="bts" onclick="cp(this,${JSON.stringify(a).replace(/"/g,'&quot;')})">📋 Copy</button>
+      <button class="bts" onclick="this.closest('.hc').remove()">✕</button>
+    </div>
+  `;
+  hl.insertBefore(card, hl.firstChild);
+}
+
+function clearHist() { document.getElementById('hl').innerHTML = ''; }
+
+function cp(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Copied!'; btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('ok'); }, 2000);
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show' + (type ? ' '+type : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 3500);
+}
+</script>
+</body>
+</html>
