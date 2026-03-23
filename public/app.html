@@ -727,14 +727,16 @@ async function setupAudio(stream) {
 }
 
 function getVadThreshold() {
+  // Slider 1-20 → threshold 0.005 a 0.020 (valores práticos para voz humana)
   const raw = parseInt(document.getElementById('vad-t').value, 10) || 5;
-  return 0.002 + (raw * 0.0005);
+  return 0.003 + (raw * 0.001);
 }
 
 function vadLoop() {
   if (!running || !analyser) return;
 
-  const data = new Uint8Array(analyser.fftSize);
+  // frequencyBinCount = fftSize/2 — usar fftSize deixava metade do buffer zerada, reduzindo RMS
+  const data = new Uint8Array(analyser.frequencyBinCount);
   analyser.getByteTimeDomainData(data);
 
   let sum = 0;
