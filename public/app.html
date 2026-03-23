@@ -284,46 +284,90 @@ let profile = JSON.parse(localStorage.getItem('iai_profile') || 'null') || {};
 
 let audioSrc = 'system';
 let running  = false;
-let audioCtx = null, mediaStream = null, analyser = null;
-let mediaRec = null, chunks = [];
-let isSpeaking = false, silTimer = null, speechStart = 0;
+
+let audioCtx = null;
+let mediaStream = null;
+let analyser = null;
+let sourceNode = null;
+
+let mediaRec = null;
+let chunks = [];
+
+let isSpeaking = false;
+let silTimer = null;
+let speechStart = 0;
 let raf = null;
+
+let lastRms = 0;
+let debugMode = true;
 
 // ════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════
 ;(async function init() {
   if (sessionToken) {
-    // Try to restore session
     const ok = await verifySession();
-    if (ok) { showApp(); }
-    else { sessionToken = ''; localStorage.removeItem('iai_token'); }
+    if (ok) showApp();
+    else {
+      sessionToken = '';
+      localStorage.removeItem('iai_token');
+    }
   }
+
   loadProfile();
-  document.getElementById('mq').addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submitManual(); }
-  });
+
+  const mq = document.getElementById('mq');
+  if (mq) {
+    mq.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        submitManual();
+      }
+    });
+  }
 })();
 
 async function verifySession() {
-  // We try a lightweight request — if it fails with 401, session is bad
   try {
     const r = await fetch('/api/answer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
-      body: JSON.stringify({ question: 'ping', profile: 'test', name: '', style: 'concise' })
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session': sessionToken
+      },
+      body: JSON.stringify({
+        question: 'ping',
+        profile: 'test',
+        name: '',
+        style: 'concise'
+      })
     });
-    // 400 is OK (missing fields but auth passed), 401 is bad session
+
     return r.status !== 401;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function loadProfile() {
-  if (profile.name)    document.getElementById('pname').value    = profile.name;
-  if (profile.profile) document.getElementById('pprofile').value = profile.profile;
-  if (profile.style)   document.getElementById('pstyle').value   = profile.style;
-  if (profile.silMs)   { document.getElementById('sil-ms').value = profile.silMs; document.getElementById('sil-val').textContent = profile.silMs + 'ms'; }
-  if (profile.vadT)    { document.getElementById('vad-t').value  = profile.vadT; document.getElementById('vad-val').textContent = profile.vadT; }
+  if (profile.name) {
+    document.getElementById('pname').value = profile.name;
+  }
+  if (profile.profile) {
+    document.getElementById('pprofile').value = profile.profile;
+  }
+  if (profile.style) {
+    document.getElementById('pstyle').value = profile.style;
+  }
+  if (profile.silMs) {
+    document.getElementById('sil-ms').value = profile.silMs;
+    document.getElementById('sil-val').textContent = profile.silMs + 'ms';
+  }
+  if (profile.vadT) {
+    document.getElementById('vad-t').value = profile.vadT;
+    document.getElementById('vad-val').textContent = profile.vadT;
+  }
+
   if (profile.name || profile.profile) {
     document.getElementById('profile-ps').textContent = 'Configured ✓';
     document.getElementById('profile-ps').className = 'ps ok';
@@ -336,42 +380,70 @@ function loadProfile() {
 async function doLogin() {
   const key = document.getElementById('lic-key').value.trim().toUpperCase();
   const err = document.getElementById('login-err');
-  if (!key) { err.textContent = 'Enter your license key.'; err.style.display = 'block'; return; }
+
+  if (!key) {
+    err.textContent = 'Enter your license key.';
+    err.style.display = 'block';
+    return;
+  }
+
   err.style.display = 'none';
 
   try {
-    const r    = await fetch('/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key })
     });
+
     const data = await r.json();
+
     if (!r.ok) {
-      if (r.status === 402) err.textContent = `License expired on ${new Date(data.expiresAt).toLocaleDateString()}. Please renew.`;
-      else err.textContent = data.error || 'Invalid license key.';
-      err.style.display = 'block'; return;
+      if (r.status === 402) {
+        err.textContent = `License expired on ${new Date(data.expiresAt).toLocaleDateString()}. Please renew.`;
+      } else {
+        err.textContent = data.error || 'Invalid license key.';
+      }
+      err.style.display = 'block';
+      return;
     }
+
     sessionToken = data.token;
     localStorage.setItem('iai_token', sessionToken);
-    localStorage.setItem('iai_plan', JSON.stringify({ plan: data.plan, email: data.email, expiresAt: data.expiresAt }));
+    localStorage.setItem('iai_plan', JSON.stringify({
+      plan: data.plan,
+      email: data.email,
+      expiresAt: data.expiresAt
+    }));
+
     showApp(data);
   } catch (e) {
-    err.textContent = 'Server error: ' + e.message; err.style.display = 'block';
+    err.textContent = 'Server error: ' + e.message;
+    err.style.display = 'block';
   }
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') doLogin();
+  const loginScreen = document.getElementById('login-screen');
+  if (e.key === 'Enter' && loginScreen && loginScreen.style.display !== 'none') {
+    doLogin();
+  }
 });
 
 function showApp(data) {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('main-app').style.display     = 'block';
+  document.getElementById('main-app').style.display = 'block';
+
   const info = data || JSON.parse(localStorage.getItem('iai_plan') || '{}');
+
   if (info.expiresAt) {
-    document.getElementById('exp-badge').textContent = 'Expires ' + new Date(info.expiresAt).toLocaleDateString();
+    document.getElementById('exp-badge').textContent =
+      'Expires ' + new Date(info.expiresAt).toLocaleDateString();
   }
+
   if (info.plan) {
-    document.getElementById('plan-badge').textContent = '● ' + info.plan.charAt(0).toUpperCase() + info.plan.slice(1);
+    document.getElementById('plan-badge').textContent =
+      '● ' + info.plan.charAt(0).toUpperCase() + info.plan.slice(1);
   }
 }
 
@@ -380,7 +452,7 @@ function doLogout() {
   localStorage.removeItem('iai_token');
   localStorage.removeItem('iai_plan');
   stopInterview();
-  document.getElementById('main-app').style.display     = 'none';
+  document.getElementById('main-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
 }
 
@@ -389,18 +461,23 @@ function doLogout() {
 // ════════════════════════════════════════════
 function saveProfile() {
   profile = {
-    name:    document.getElementById('pname').value.trim(),
+    name: document.getElementById('pname').value.trim(),
     profile: document.getElementById('pprofile').value.trim(),
-    style:   document.getElementById('pstyle').value,
-    silMs:   document.getElementById('sil-ms').value,
-    vadT:    document.getElementById('vad-t').value
+    style: document.getElementById('pstyle').value,
+    silMs: document.getElementById('sil-ms').value,
+    vadT: document.getElementById('vad-t').value
   };
-  if (!profile.profile) { toast('Add your professional profile first', 'err'); return; }
+
+  if (!profile.profile) {
+    toast('Add your professional profile first', 'err');
+    return;
+  }
+
   localStorage.setItem('iai_profile', JSON.stringify(profile));
   document.getElementById('profile-ps').textContent = 'Saved ✓';
-  document.getElementById('profile-ps').className   = 'ps ok';
+  document.getElementById('profile-ps').className = 'ps ok';
   toast('Profile saved!', 'ok');
-  // Auto-close panel
+
   document.getElementById('profile-body').classList.remove('open');
   document.getElementById('profile-chev').classList.remove('open');
 }
@@ -415,67 +492,210 @@ function togglePanel(bodyId, chevId) {
 // ════════════════════════════════════════════
 function setSrc(src) {
   audioSrc = src;
+
   document.getElementById('src-sys').classList.toggle('active', src === 'system');
   document.getElementById('src-mic').classList.toggle('active', src === 'mic');
+
   document.getElementById('src-hint').innerHTML = src === 'system'
-    ? '<b>System audio:</b> Click Start → share the video call tab in Chrome and <b>enable "Share tab audio"</b>. The app auto-detects when the interviewer speaks.'
-    : '<b>Microphone:</b> The app listens to your mic. Best with headphones + open mic that picks up ambient sound, or mic near speakers.';
+    ? '<b>System audio:</b> Click Start → select the video call tab in Chrome and <b>enable "Share tab audio"</b>.'
+    : '<b>Microphone:</b> The app listens to your mic. Best with headphones, or keep the mic close to the speaker if you need ambient capture.';
 }
 
 // ════════════════════════════════════════════
 //  INTERVIEW TOGGLE
 // ════════════════════════════════════════════
 async function toggleInterview() {
-  if (running) { stopInterview(); return; }
-  if (!profile.profile) { toast('Save your professional profile first', 'err'); return; }
+  if (running) {
+    stopInterview();
+    return;
+  }
+
+  if (!profile.profile) {
+    toast('Save your professional profile first', 'err');
+    return;
+  }
+
   await startInterview();
+}
+
+function isSecureEnoughForMedia() {
+  return window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 }
 
 async function startInterview() {
   try {
-    let stream;
-    if (audioSrc === 'system') {
-      try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { width: 1, height: 1 },
-          audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 16000 }
-        });
-        if (stream.getAudioTracks().length === 0) {
-          stream.getTracks().forEach(t => t.stop());
-          throw new Error('No audio. Did you check "Share tab audio"?');
-        }
-        stream.getVideoTracks().forEach(t => t.stop()); // keep only audio
-      } catch (e) {
-        if (e.name === 'NotAllowedError') { toast('Sharing cancelled', 'err'); return; }
-        toast('System audio failed — falling back to mic. (' + e.message + ')', 'err');
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
-    } else {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false }
-      });
+    if (!isSecureEnoughForMedia()) {
+      toast('Audio capture requires HTTPS or localhost', 'err');
+      setStatus('idle', 'Open the app on HTTPS or localhost');
+      return;
     }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast('This browser does not support audio capture', 'err');
+      return;
+    }
+
+    let stream;
+
+    if (audioSrc === 'system') {
+      stream = await captureSystemAudio();
+    } else {
+      stream = await captureMicrophoneAudio();
+    }
+
+    if (!stream) {
+      throw new Error('Could not start audio stream');
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.length) {
+      cleanupStream(stream);
+      throw new Error('No audio track received');
+    }
+
+    if (debugMode) {
+      console.log('[InterviewAI] audio tracks:', audioTracks.map(t => ({
+        label: t.label,
+        enabled: t.enabled,
+        muted: t.muted,
+        readyState: t.readyState,
+        settings: t.getSettings ? t.getSettings() : {}
+      })));
+    }
+
     mediaStream = stream;
-    setupAudio(stream);
+
+    await setupAudio(stream);
+
     running = true;
-    document.getElementById('main-btn').className  = 'start-btn running';
+    document.getElementById('main-btn').className = 'start-btn running';
     document.getElementById('main-btn').textContent = '⏹ Stop Interview';
     setStatus('listen', 'Listening… waiting for a question');
-    stream.getAudioTracks()[0].addEventListener('ended', () => { if (running) stopInterview(); });
+
+    const primaryTrack = audioTracks[0];
+    primaryTrack.addEventListener('ended', () => {
+      if (running) stopInterview();
+    });
+
+    primaryTrack.addEventListener('mute', () => {
+      if (debugMode) console.log('[InterviewAI] audio track muted');
+    });
+
+    primaryTrack.addEventListener('unmute', () => {
+      if (debugMode) console.log('[InterviewAI] audio track unmuted');
+    });
+
   } catch (e) {
+    console.error('[InterviewAI] startInterview error:', e);
     toast('Error: ' + e.message, 'err');
+    setStatus('idle', 'Could not access audio');
+    stopInterview();
   }
+}
+
+async function captureSystemAudio() {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true
+    });
+
+    const audioTracks = stream.getAudioTracks();
+    const videoTracks = stream.getVideoTracks();
+
+    if (!audioTracks.length) {
+      cleanupStream(stream);
+      throw new Error('No system audio found. Choose a browser tab and enable "Share tab audio".');
+    }
+
+    // Para não deixar vídeo capturando sem necessidade
+    videoTracks.forEach(track => track.stop());
+
+    return new MediaStream(audioTracks);
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      throw new Error('Screen sharing was cancelled');
+    }
+    throw e;
+  }
+}
+
+async function captureMicrophoneAudio() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1
+      },
+      video: false
+    });
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      throw new Error('Microphone permission denied');
+    }
+    throw e;
+  }
+}
+
+function cleanupStream(stream) {
+  try {
+    stream.getTracks().forEach(t => t.stop());
+  } catch {}
 }
 
 function stopInterview() {
   running = false;
-  cancelAnimationFrame(raf);
-  clearTimeout(silTimer);
-  if (mediaRec && mediaRec.state !== 'inactive') mediaRec.stop();
-  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
-  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+
+  if (raf) {
+    cancelAnimationFrame(raf);
+    raf = null;
+  }
+
+  if (silTimer) {
+    clearTimeout(silTimer);
+    silTimer = null;
+  }
+
+  try {
+    if (mediaRec && mediaRec.state !== 'inactive') {
+      mediaRec.onstop = null;
+      mediaRec.stop();
+    }
+  } catch {}
+
+  mediaRec = null;
+  chunks = [];
   isSpeaking = false;
-  document.getElementById('main-btn').className  = 'start-btn idle';
+  speechStart = 0;
+  lastRms = 0;
+
+  if (mediaStream) {
+    cleanupStream(mediaStream);
+    mediaStream = null;
+  }
+
+  try {
+    if (sourceNode) {
+      sourceNode.disconnect();
+      sourceNode = null;
+    }
+  } catch {}
+
+  try {
+    if (analyser) {
+      analyser.disconnect?.();
+      analyser = null;
+    }
+  } catch {}
+
+  if (audioCtx) {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
+
+  document.getElementById('main-btn').className = 'start-btn idle';
   document.getElementById('main-btn').textContent = '▶ Start Interview Mode';
   setStatus('idle', 'Stopped — press Start to resume');
   resetBars();
@@ -484,39 +704,76 @@ function stopInterview() {
 // ════════════════════════════════════════════
 //  AUDIO PIPELINE
 // ════════════════════════════════════════════
-function setupAudio(stream) {
-  audioCtx = new AudioContext();
-  const src = audioCtx.createMediaStreamSource(stream);
-  analyser  = audioCtx.createAnalyser();
+async function setupAudio(stream) {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  sourceNode = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
-  src.connect(analyser);
+  analyser.smoothingTimeConstant = 0.15;
+
+  sourceNode.connect(analyser);
+
   vadLoop();
 }
 
+function getVadThreshold() {
+  const raw = parseInt(document.getElementById('vad-t').value, 10) || 5;
+  // Mapeia slider 1..20 para threshold mais realista
+  // Ex.: 1 => 0.0025 | 5 => 0.0045 | 10 => 0.007 | 20 => 0.012
+  return 0.002 + (raw * 0.0005);
+}
+
 function vadLoop() {
-  if (!running) return;
-  const data = new Uint8Array(analyser.frequencyBinCount);
+  if (!running || !analyser) return;
+
+  const data = new Uint8Array(analyser.fftSize);
   analyser.getByteTimeDomainData(data);
+
   let sum = 0;
-  for (let i = 0; i < data.length; i++) { const v = (data[i]-128)/128; sum += v*v; }
-  const rms  = Math.sqrt(sum / data.length);
-  const thr  = parseInt(document.getElementById('vad-t').value) / 1000;
-  const silMs = parseInt(document.getElementById('sil-ms').value);
+  for (let i = 0; i < data.length; i++) {
+    const v = (data[i] - 128) / 128;
+    sum += v * v;
+  }
+
+  const rms = Math.sqrt(sum / data.length);
+  lastRms = rms;
+
+  const thr = getVadThreshold();
+  const silMs = parseInt(document.getElementById('sil-ms').value, 10) || 1800;
 
   updateBars(rms);
 
+  if (debugMode && Math.random() < 0.02) {
+    console.log('[InterviewAI] RMS:', rms.toFixed(5), 'threshold:', thr.toFixed(5));
+  }
+
   if (rms > thr) {
-    clearTimeout(silTimer); silTimer = null;
+    if (silTimer) {
+      clearTimeout(silTimer);
+      silTimer = null;
+    }
+
     if (!isSpeaking) {
-      isSpeaking = true; speechStart = Date.now(); chunks = [];
+      isSpeaking = true;
+      speechStart = Date.now();
+      chunks = [];
       startRec();
       setStatus('speech', 'Speech detected — recording…');
     }
   } else if (isSpeaking && !silTimer) {
     const speechSnapshot = speechStart;
+
     silTimer = setTimeout(() => {
-      isSpeaking = false; silTimer = null;
+      isSpeaking = false;
+      silTimer = null;
+
       const dur = Date.now() - speechSnapshot - silMs;
+
       if (dur > 700) {
         setStatus('process', '<span class="spin"></span> Transcribing…');
         stopRecAndProcess();
@@ -526,51 +783,134 @@ function vadLoop() {
       }
     }, silMs);
   }
+
   raf = requestAnimationFrame(vadLoop);
+}
+
+function getSupportedMimeType() {
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4'
+  ];
+
+  for (const type of types) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+
+  return '';
 }
 
 function startRec() {
   if (!mediaStream) return;
-  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-  mediaRec = new MediaRecorder(mediaStream, { mimeType: mime });
-  mediaRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-  mediaRec.start(200);
+
+  try {
+    const mimeType = getSupportedMimeType();
+    const options = mimeType ? { mimeType } : undefined;
+
+    mediaRec = new MediaRecorder(mediaStream, options);
+
+    mediaRec.ondataavailable = e => {
+      if (e.data && e.data.size > 0) {
+        chunks.push(e.data);
+      }
+    };
+
+    mediaRec.onerror = e => {
+      console.error('[InterviewAI] MediaRecorder error:', e);
+    };
+
+    mediaRec.start(250);
+
+    if (debugMode) {
+      console.log('[InterviewAI] recorder started', { mimeType: mediaRec.mimeType });
+    }
+  } catch (e) {
+    console.error('[InterviewAI] startRec error:', e);
+    toast('Recorder error: ' + e.message, 'err');
+  }
 }
 
 function stopRecAndProcess() {
-  if (!mediaRec || mediaRec.state === 'inactive') { processAudio(); return; }
+  if (!mediaRec || mediaRec.state === 'inactive') {
+    processAudio();
+    return;
+  }
+
   mediaRec.onstop = processAudio;
   mediaRec.stop();
 }
 
 function stopRecDiscard() {
-  if (mediaRec && mediaRec.state !== 'inactive') { mediaRec.onstop = null; mediaRec.stop(); }
+  if (mediaRec && mediaRec.state !== 'inactive') {
+    mediaRec.onstop = null;
+    mediaRec.stop();
+  }
   chunks = [];
 }
 
+async function blobToBase64(blob) {
+  const buffer = await blob.arrayBuffer();
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const slice = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, slice);
+  }
+
+  return btoa(binary);
+}
+
 async function processAudio() {
-  if (!chunks.length) { setStatus('listen', 'Listening…'); return; }
-  const blob = new Blob(chunks, { type: 'audio/webm' });
+  if (!chunks.length) {
+    setStatus('listen', 'Listening…');
+    return;
+  }
+
+  const mimeType = (mediaRec && mediaRec.mimeType) || 'audio/webm';
+  const blob = new Blob(chunks, { type: mimeType });
   chunks = [];
 
-  try {
-    // Convert blob to base64 for JSON transport
-    const ab     = await blob.arrayBuffer();
-    const b64    = btoa(String.fromCharCode(...new Uint8Array(ab)));
+  if (debugMode) {
+    console.log('[InterviewAI] audio blob size:', blob.size, 'type:', blob.type);
+  }
 
-    // 1. Transcribe
+  if (blob.size < 1200) {
+    setStatus('listen', 'Listening… (audio too short)');
+    return;
+  }
+
+  try {
+    const b64 = await blobToBase64(blob);
+
     const tr = await fetch('/api/transcribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
-      body: JSON.stringify({ audio: b64, mimeType: 'audio/webm' })
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session': sessionToken
+      },
+      body: JSON.stringify({
+        audio: b64,
+        mimeType: blob.type || 'audio/webm'
+      })
     });
+
     const trData = await tr.json();
+
     if (!tr.ok) {
-      if (tr.status === 401) { doLogout(); return; }
+      if (tr.status === 401) {
+        doLogout();
+        return;
+      }
       throw new Error(trData.error || 'Transcription error');
     }
 
     const question = (trData.text || '').trim();
+
     if (!question || question.length < 4) {
       setStatus('listen', 'Listening… (no speech detected, retrying)');
       return;
@@ -579,21 +919,28 @@ async function processAudio() {
     setStatus('process', '<span class="spin"></span> Generating answer…');
     showAnswer(question, null);
 
-    // 2. Generate answer
     const ar = await fetch('/api/answer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session': sessionToken
+      },
       body: JSON.stringify({
         question,
         profile: profile.profile,
-        name:    profile.name || '',
-        style:   profile.style || 'concise',
-        model:   'gpt-4o-mini'
+        name: profile.name || '',
+        style: profile.style || 'concise',
+        model: 'gpt-4o-mini'
       })
     });
+
     const arData = await ar.json();
+
     if (!ar.ok) {
-      if (ar.status === 401) { doLogout(); return; }
+      if (ar.status === 401) {
+        doLogout();
+        return;
+      }
       throw new Error(arData.error || 'Answer generation error');
     }
 
@@ -602,6 +949,7 @@ async function processAudio() {
     setStatus('listen', 'Listening… waiting for next question');
 
   } catch (e) {
+    console.error('[InterviewAI] processAudio error:', e);
     toast('Error: ' + e.message, 'err');
     setStatus('listen', 'Error — listening again…');
   }
@@ -614,24 +962,50 @@ function toggleManual() {
   const b = document.getElementById('mfb');
   b.style.display = b.style.display === 'flex' ? 'none' : 'flex';
 }
+
 async function submitManual() {
   const q = document.getElementById('mq').value.trim();
-  if (!q || !profile.profile) { toast(!q ? 'Type a question first' : 'Save your profile first', 'err'); return; }
+
+  if (!q || !profile.profile) {
+    toast(!q ? 'Type a question first' : 'Save your profile first', 'err');
+    return;
+  }
+
   document.getElementById('mq').value = '';
   showAnswer(q, null);
   setStatus('process', '<span class="spin"></span> Generating answer…');
+
   try {
-    const r    = await fetch('/api/answer', {
+    const r = await fetch('/api/answer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-session': sessionToken },
-      body: JSON.stringify({ question: q, profile: profile.profile, name: profile.name || '', style: profile.style || 'concise' })
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session': sessionToken
+      },
+      body: JSON.stringify({
+        question: q,
+        profile: profile.profile,
+        name: profile.name || '',
+        style: profile.style || 'concise'
+      })
     });
+
     const data = await r.json();
-    if (!r.ok) { if (r.status === 401) { doLogout(); return; } throw new Error(data.error); }
+
+    if (!r.ok) {
+      if (r.status === 401) {
+        doLogout();
+        return;
+      }
+      throw new Error(data.error || 'Answer generation error');
+    }
+
     showAnswer(q, data.answer);
     addHistory(q, data.answer);
     setStatus(running ? 'listen' : 'idle', running ? 'Listening…' : 'Ready');
-  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
 }
 
 // ════════════════════════════════════════════
@@ -643,61 +1017,96 @@ function setStatus(state, html) {
 }
 
 function updateBars(rms) {
-  const level = Math.min(rms * 120, 5);
+  const visual = Math.min(Math.max(rms * 180, 0), 5);
+
   [0,1,2,3,4].forEach(i => {
-    const el = document.getElementById('lb'+i);
-    el.className = i < level ? ('lb ' + (i < 2 ? 'on' : i < 4 ? 'mid' : 'hi')) : 'lb';
+    const el = document.getElementById('lb' + i);
+    el.className = i < visual
+      ? ('lb ' + (i < 2 ? 'on' : i < 4 ? 'mid' : 'hi'))
+      : 'lb';
   });
 }
-function resetBars() { [0,1,2,3,4].forEach(i => { document.getElementById('lb'+i).className = 'lb'; }); }
+
+function resetBars() {
+  [0,1,2,3,4].forEach(i => {
+    document.getElementById('lb' + i).className = 'lb';
+  });
+}
 
 function showAnswer(q, a) {
   const ca = document.getElementById('ca');
+
+  const safeAnswerArg = a
+    ? JSON.stringify(a).replace(/"/g, '&quot;')
+    : '';
+
   ca.innerHTML = `
     <div class="cal">💡 Suggested Answer</div>
     <div class="caq">"${esc(q)}"</div>
     ${a
-      ? `<div class="cat">${esc(a)}</div><div class="caf"><button class="bts" onclick="cp(this,${JSON.stringify(a).replace(/"/g,'&quot;')})">📋 Copy</button></div>`
+      ? `<div class="cat">${esc(a)}</div>
+         <div class="caf">
+           <button class="bts" onclick="cp(this, ${safeAnswerArg})">📋 Copy</button>
+         </div>`
       : `<div class="cat dim"><span class="spin"></span> Generating…</div>`
     }
   `;
+
   ca.classList.add('flash');
   setTimeout(() => ca.classList.remove('flash'), 3000);
 }
 
 function addHistory(q, a) {
-  const hl   = document.getElementById('hl');
+  const hl = document.getElementById('hl');
   const card = document.createElement('div');
+  const safeAnswerArg = JSON.stringify(a).replace(/"/g, '&quot;');
+
   card.className = 'hc';
   card.innerHTML = `
     <div class="hcq">"${esc(q)}"</div>
     <div class="hca">${esc(a)}</div>
     <div class="hcf">
-      <button class="bts" onclick="cp(this,${JSON.stringify(a).replace(/"/g,'&quot;')})">📋 Copy</button>
+      <button class="bts" onclick="cp(this, ${safeAnswerArg})">📋 Copy</button>
       <button class="bts" onclick="this.closest('.hc').remove()">✕</button>
     </div>
   `;
+
   hl.insertBefore(card, hl.firstChild);
 }
 
-function clearHist() { document.getElementById('hl').innerHTML = ''; }
+function clearHist() {
+  document.getElementById('hl').innerHTML = '';
+}
 
 function cp(btn, text) {
   navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = '✓ Copied!'; btn.classList.add('ok');
-    setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('ok'); }, 2000);
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('ok');
+
+    setTimeout(() => {
+      btn.textContent = '📋 Copy';
+      btn.classList.remove('ok');
+    }, 2000);
   });
 }
 
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function toast(msg, type='') {
   const el = document.getElementById('toast');
-  el.textContent = msg; el.className = 'show' + (type ? ' '+type : '');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+
   clearTimeout(el._t);
-  el._t = setTimeout(() => { el.className = ''; }, 3500);
+  el._t = setTimeout(() => {
+    el.className = '';
+  }, 3500);
 }
 </script>
 </body>
