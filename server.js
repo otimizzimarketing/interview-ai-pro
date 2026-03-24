@@ -2,16 +2,17 @@
  * InterviewAI Pro — Backend Server
  * Node.js 18+ required (uses built-in fetch, Blob, FormData)
  *
- * npm install express cors stripe dotenv
+ * npm install express cors stripe dotenv resend
  * node server.js
  */
 
 require('dotenv').config();
-const express = require('express');
-const cors    = require('cors');
-const crypto  = require('crypto');
-const fs      = require('fs');
-const path    = require('path');
+const express      = require('express');
+const cors         = require('cors');
+const crypto       = require('crypto');
+const fs           = require('fs');
+const path         = require('path');
+const { Resend }   = require('resend');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -319,22 +320,42 @@ app.post('/stripe/webhook', async (req, res) => {
 
       console.log(`✅ License created — ${email} | ${plan} | Key: ${key} | Expires: ${expiresAt}`);
 
-      // ─────────────────────────────────────────────────
-      // TODO: Send license key by email using Resend or SendGrid
-      //
-      // Example with Resend (npm install resend):
-      //   const { Resend } = require('resend');
-      //   const resend = new Resend(process.env.RESEND_API_KEY);
-      //   await resend.emails.send({
-      //     from: 'InterviewAI Pro <noreply@yourdomain.com>',
-      //     to: email,
-      //     subject: 'Your InterviewAI Pro license key',
-      //     html: `<h2>Welcome!</h2>
-      //            <p>Your license key: <strong>${key}</strong></p>
-      //            <p>Plan: ${plan} | Expires: ${new Date(expiresAt).toLocaleDateString()}</p>
-      //            <p><a href="${FRONTEND_URL}/app.html">Access the app →</a></p>`
-      //   });
-      // ─────────────────────────────────────────────────
+      // Send license key by email via Resend
+      if (process.env.RESEND_API_KEY) {
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const planNames = { quarterly: 'Trimestral (3 meses)', semiannual: 'Semestral (6 meses)', annual: 'Anual (12 meses)' };
+          const expDate = new Date(expiresAt).toLocaleDateString('pt-BR');
+
+          await resend.emails.send({
+            from: 'InterviewAI Pro <noreply@interviewaipro.com.br>',
+            to: email,
+            subject: '🎉 Sua chave de acesso — InterviewAI Pro',
+            html: `
+              <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0f0f0f;color:#e0e0e0;border-radius:12px;overflow:hidden;">
+                <div style="background:#4f8ef7;padding:28px 32px;">
+                  <h1 style="margin:0;font-size:22px;color:#fff;">InterviewAI Pro</h1>
+                  <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:14px;">Seu acesso foi liberado!</p>
+                </div>
+                <div style="padding:32px;">
+                  <p style="font-size:15px;margin:0 0 20px;">Olá! Seu pagamento foi confirmado. Aqui está sua chave de licença:</p>
+                  <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:18px;text-align:center;margin-bottom:24px;">
+                    <p style="margin:0 0 6px;font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;">Chave de licença</p>
+                    <p style="margin:0;font-size:18px;font-weight:700;color:#4f8ef7;letter-spacing:2px;font-family:monospace;">${key}</p>
+                  </div>
+                  <p style="font-size:13px;color:#666;margin:0 0 6px;">📦 Plano: <strong style="color:#e0e0e0;">${planNames[plan] || plan}</strong></p>
+                  <p style="font-size:13px;color:#666;margin:0 0 24px;">📅 Válido até: <strong style="color:#e0e0e0;">${expDate}</strong></p>
+                  <a href="${FRONTEND_URL}/app.html" style="display:inline-block;background:#4f8ef7;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:14px;">Acessar o app →</a>
+                  <p style="font-size:12px;color:#555;margin:24px 0 0;">Guarde esta chave em local seguro. Em caso de dúvidas, responda este email.</p>
+                </div>
+              </div>
+            `
+          });
+          console.log(`📧 Email enviado para ${email}`);
+        } catch (emailErr) {
+          console.error('Email error:', emailErr.message);
+        }
+      }
     }
   }
 
